@@ -1,0 +1,21 @@
+# Maven & build artifacts
+**/target/
+target/
+*.class
+*.log
+.mvn/wrapper/maven-wrapper.jar
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.iml
+*.iws
+*.ipr
+.project
+.classpath
+.settings/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+Desktop.ini

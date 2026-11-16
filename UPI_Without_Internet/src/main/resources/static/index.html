@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UPI Offline Mesh — Decentralized Payment Protocol Demo</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+    <!-- Top Navigation Bar -->
+    <header class="navbar">
+        <div class="brand-wrapper">
+            <div class="brand-icon">📡</div>
+            <div>
+                <div class="brand-title">UPI Offline Mesh</div>
+                <div class="brand-tagline">
+                    <span class="pulse-dot"></span>
+                    Zero-Internet Peer-to-Peer Settlement Protocol
+                </div>
+            </div>
+        </div>
+
+        <div class="nav-actions">
+            <div id="serverStatusBadge" class="server-badge simulated">
+                <span class="status-light"></span> Checking Server...
+            </div>
+            <button id="btnCheckConnection" class="btn btn-ghost btn-sm" title="Refresh server connection status">
+                🔌 Check API
+            </button>
+            <button id="btnOpenArchModal" class="btn btn-ghost btn-sm">
+                📖 How It Works
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content Container -->
+    <main class="app-container">
+
+        <!-- Top Metrics Row -->
+        <section class="metrics-row">
+            <div class="metric-card cyan">
+                <div class="metric-header">
+                    <span class="metric-title">Mesh Nodes</span>
+                    <span class="metric-icon">📱</span>
+                </div>
+                <div class="metric-value" id="metricActiveNodes">5</div>
+                <div class="metric-subtitle">4 Offline Relays • 1 4G Bridge</div>
+            </div>
+
+            <div class="metric-card indigo">
+                <div class="metric-header">
+                    <span class="metric-title">Packets In Mesh</span>
+                    <span class="metric-icon">📦</span>
+                </div>
+                <div class="metric-value" id="metricActivePackets">0</div>
+                <div class="metric-subtitle">Active encrypted envelopes</div>
+            </div>
+
+            <div class="metric-card emerald">
+                <div class="metric-header">
+                    <span class="metric-title">Total Settled</span>
+                    <span class="metric-icon">🏦</span>
+                </div>
+                <div class="metric-value" id="metricTotalSettled">₹0.00</div>
+                <div class="metric-subtitle">Processed via ledger update</div>
+            </div>
+
+            <div class="metric-card amber">
+                <div class="metric-header">
+                    <span class="metric-title">Idempotency Shield</span>
+                    <span class="metric-icon">🛡️</span>
+                </div>
+                <div class="metric-value" id="metricDuplicates">0</div>
+                <div class="metric-subtitle">Duplicate deliveries blocked</div>
+            </div>
+        </section>
+
+        <!-- Interactive Control Hub -->
+        <section class="control-hub">
+            <div class="hub-info">
+                <div class="hub-title">
+                    <span>⚡ Mesh Protocol Flow Controller</span>
+                </div>
+                <div class="hub-desc">
+                    Drive the pipeline: Inject payment offline &rarr; Gossip across stranger phones &rarr; Bridge delivers to backend.
+                </div>
+            </div>
+
+            <div class="hub-buttons">
+                <button id="btnRunGossip" class="btn btn-accent">
+                    🔄 Run Gossip Round
+                </button>
+                <button id="btnFlushBridges" class="btn btn-success">
+                    📡 Bridges Upload (4G Uplink)
+                </button>
+                <button id="btnDuplicateStorm" class="btn btn-warning" title="Floods 3 bridges simultaneously to test concurrent idempotency">
+                    🧪 Duplicate Storm Test
+                </button>
+                <button id="btnInteractiveTour" class="btn btn-primary" title="Automated step-by-step walkthrough">
+                    🎬 1-Click Demo Tour
+                </button>
+                <button id="btnResetMesh" class="btn btn-danger">
+                    🗑 Reset Mesh
+                </button>
+            </div>
+        </section>
+
+        <!-- Core Grid: Phone Mockup & Mesh Network Visualizer -->
+        <div class="core-grid">
+
+            <!-- Left: Simulated Mobile UPI Phone App -->
+            <div class="phone-wrapper">
+                <div class="phone-frame">
+                    
+                    <!-- Phone Notch -->
+                    <div class="phone-notch">
+                        <div class="phone-camera"></div>
+                        <div class="phone-speaker"></div>
+                    </div>
+
+                    <!-- Status Bar -->
+                    <div class="phone-status-bar">
+                        <span>12:45 PM</span>
+                        <span>📴 NO 4G • NO WI-FI</span>
+                    </div>
+
+                    <!-- Offline Status Alert -->
+                    <div class="offline-alert-banner">
+                        <div class="offline-pill">
+                            <span>🚫</span>
+                            <span>OFFLINE MODE</span>
+                        </div>
+                        <div class="mesh-status-indicator">
+                            <span>📡 BLE Mesh Ready</span>
+                        </div>
+                    </div>
+
+                    <!-- App Header -->
+                    <div class="app-header">
+                        <div class="upi-logo-chip">
+                            <span>UPI MESH</span>
+                            <span class="upi-badge-mini">OFFLINE</span>
+                        </div>
+                        <div style="font-size: 11px; color: var(--text-muted); font-family: var(--font-mono);">
+                            RSA + AES-GCM
+                        </div>
+                    </div>
+
+                    <!-- Sender Selector -->
+                    <div class="app-sender-card">
+                        <div class="card-label">Debiting Account (Sender)</div>
+                        <div class="sender-select-wrapper">
+                            <div class="sender-avatar" id="phoneSenderAvatar">A</div>
+                            <div class="sender-details">
+                                <select id="phoneSenderSelect" class="custom-select">
+                                    <option value="alice@demo">Alice (alice@demo)</option>
+                                    <option value="bob@demo">Bob (bob@demo)</option>
+                                    <option value="carol@demo">Carol (carol@demo)</option>
+                                    <option value="dave@demo">Dave (dave@demo)</option>
+                                </select>
+                                <div class="sender-balance-tag" id="phoneSenderBalance">Avail: ₹5000.00</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Payee Selector -->
+                    <div class="payee-section">
+                        <div class="card-label">Beneficiary (Payee)</div>
+                        <select id="phoneReceiverSelect" class="custom-select">
+                            <option value="bob@demo">Bob (bob@demo)</option>
+                            <option value="carol@demo">Carol (carol@demo)</option>
+                            <option value="alice@demo">Alice (alice@demo)</option>
+                            <option value="dave@demo">Dave (dave@demo)</option>
+                        </select>
+                        <div class="payee-chips">
+                            <span class="payee-chip active" data-vpa="bob@demo">Bob</span>
+                            <span class="payee-chip" data-vpa="carol@demo">Carol</span>
+                            <span class="payee-chip" data-vpa="dave@demo">Dave</span>
+                            <span class="payee-chip" data-vpa="alice@demo">Alice</span>
+                        </div>
+                    </div>
+
+                    <!-- Amount Input -->
+                    <div class="amount-section">
+                        <div class="card-label">Payment Amount</div>
+                        <div class="amount-input-box">
+                            <span class="currency-symbol">₹</span>
+                            <input type="number" id="phoneAmountInput" class="amount-input" value="500" min="1" step="10">
+                        </div>
+                        <div class="quick-amounts">
+                            <span class="quick-chip" data-amount="100">+ ₹100</span>
+                            <span class="quick-chip" data-amount="250">+ ₹250</span>
+                            <span class="quick-chip" data-amount="500">+ ₹500</span>
+                            <span class="quick-chip" data-amount="1000">+ ₹1000</span>
+                        </div>
+                    </div>
+
+                    <!-- Advanced Routing Params -->
+                    <div class="param-row">
+                        <div class="param-col">
+                            <label>TTL Hops Limit</label>
+                            <select id="phoneTtlSelect">
+                                <option value="5" selected>5 Max Hops</option>
+                                <option value="3">3 Hops</option>
+                                <option value="8">8 Hops</option>
+                            </select>
+                        </div>
+                        <div class="param-col">
+                            <label>Origin Device</label>
+                            <select id="phoneStartDeviceSelect">
+                                <option value="phone-alice" selected>phone-alice</option>
+                                <option value="phone-stranger1">phone-stranger1</option>
+                                <option value="phone-stranger2">phone-stranger2</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Pay Button -->
+                    <button id="btnPhonePay" class="btn-pay-offline">
+                        <span>🔒 Pay Offline via Mesh</span>
+                    </button>
+
+                </div>
+            </div>
+
+            <!-- Right: Interactive Canvas Mesh Visualizer -->
+            <div class="visualizer-wrapper">
+                <div class="viz-header">
+                    <div class="viz-title-box">
+                        <div class="viz-title">
+                            <span>📡 Live Mesh Network Topology</span>
+                        </div>
+                        <div class="viz-subtitle">
+                            Drag nodes to reorganize • Click any node to toggle 4G Internet
+                        </div>
+                    </div>
+
+                    <div class="viz-toolbar">
+                        <button class="btn btn-ghost btn-sm" onclick="window.app.visualizer.repositionNodesIfNeeded()">
+                            🎯 Reset Positions
+                        </button>
+                    </div>
+                </div>
+
+                <div class="canvas-container">
+                    <canvas id="meshCanvas"></canvas>
+                    
+                    <div class="viz-legend">
+                        <div class="legend-item">
+                            <span class="legend-color sender"></span>
+                            <span>Sender Node (Alice)</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-color relay"></span>
+                            <span>Offline Relays (Strangers)</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-color bridge"></span>
+                            <span>4G Bridge (Uplink Node)</span>
+                        </div>
+                    </div>
+
+                    <div class="viz-live-stats">
+                        <span class="pulse-dot"></span>
+                        <span>BLE GATT GOSSIP ACTIVE</span>
+                    </div>
+                </div>
+
+                <!-- Device Quick Control Strip -->
+                <div class="device-strip" id="deviceMiniCards">
+                    <!-- Populated dynamically by JS -->
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Full Width Tabbed Section: Accounts, Ledger, Cryptography, Logs -->
+        <section class="tabs-container">
+            <div class="tabs-header">
+                <div class="tab-nav">
+                    <button class="tab-btn active" data-tab="accounts">
+                        <span>🏦</span>
+                        <span>Bank Accounts</span>
+                    </button>
+                    <button class="tab-btn" data-tab="ledger">
+                        <span>📜</span>
+                        <span>Transaction Ledger</span>
+                    </button>
+                    <button class="tab-btn" data-tab="crypto">
+                        <span>🔐</span>
+                        <span>Cryptography Inspector</span>
+                    </button>
+                    <button class="tab-btn" data-tab="terminal">
+                        <span>🪵</span>
+                        <span>Activity Terminal</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tab 1: Bank Accounts -->
+            <div class="tab-content active" id="tab-accounts">
+                <div class="table-wrapper">
+                    <table class="data-table" id="accountsTable">
+                        <thead>
+                            <tr>
+                                <th>VPA (UPI Address)</th>
+                                <th>Account Holder</th>
+                                <th>Available Balance</th>
+                                <th>Optimistic Lock (@Version)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Tab 2: Transaction Ledger -->
+            <div class="tab-content" id="tab-ledger">
+                <div class="table-wrapper">
+                    <table class="data-table" id="txTable">
+                        <thead>
+                            <tr>
+                                <th>Tx ID</th>
+                                <th>Idempotency Hash (SHA-256)</th>
+                                <th>Sender</th>
+                                <th>Receiver</th>
+                                <th>Amount</th>
+                                <th>Settlement Status</th>
+                                <th>Delivering Bridge</th>
+                                <th>Hops</th>
+                                <th>Timestamp</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Tab 3: Cryptography & Security Inspector -->
+            <div class="tab-content" id="tab-crypto">
+                <div class="crypto-grid">
+                    
+                    <!-- RSA & Scheme Card -->
+                    <div class="crypto-card">
+                        <div class="crypto-card-title">
+                            <span>🔑</span>
+                            <span>Server Public Key & Hybrid Protocol</span>
+                        </div>
+                        <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">
+                            The sender phone encrypts payments with the server's RSA-2048 public key. Intermediary stranger phones cannot decrypt or read the payload.
+                        </div>
+                        <div class="raw-code-box" id="cryptoRsaKey">Loading RSA Public Key...</div>
+                        <div style="font-size: 11px; color: var(--accent-cyan); margin-top: 8px;" id="cryptoScheme">
+                            RSA-2048 / OAEP-SHA256 + AES-256-GCM
+                        </div>
+                    </div>
+
+                    <!-- Wire Format Breakdown -->
+                    <div class="crypto-card">
+                        <div class="crypto-card-title">
+                            <span>📦</span>
+                            <span>Wire Envelope Layout (MeshPacket)</span>
+                        </div>
+                        <div class="crypto-byte-structure">
+                            <div class="byte-block rsa">
+                                <strong>Part 1: RSA-OAEP Encrypted Key</strong>
+                                <div>256 Bytes — Ephemeral AES-256 session key encrypted with Server Public Key</div>
+                            </div>
+                            <div class="byte-block iv">
+                                <strong>Part 2: Initialization Vector (IV)</strong>
+                                <div>12 Bytes — Unique GCM nonce generated per packet</div>
+                            </div>
+                            <div class="byte-block aes">
+                                <strong>Part 3: Authenticated Ciphertext & Tag</strong>
+                                <div>Variable Bytes + 16-Byte GCM Tag — Any single-bit tampering invalidates tag!</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Security & Idempotency Card -->
+                    <div class="crypto-card">
+                        <div class="crypto-card-title">
+                            <span>🛡️</span>
+                            <span>Idempotency Hash & Tamper Attack Test</span>
+                        </div>
+                        <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px;">
+                            <strong>SHA-256 Ciphertext Digest:</strong>
+                        </div>
+                        <div class="raw-code-box" id="cryptoHash" style="height: 60px;">
+                            Compute on packet injection...
+                        </div>
+
+                        <div style="margin-top: 14px;">
+                            <button id="btnTestTamper" class="btn btn-danger btn-sm">
+                                🧪 Test Tamper Attack (Flip 1 Bit)
+                            </button>
+                            <div style="font-size: 11px; color: var(--text-dim); margin-top: 6px;">
+                                Tests server rejection when an untrusted intermediate attempts to modify the encrypted payload.
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- Tab 4: Live Activity Terminal -->
+            <div class="tab-content" id="tab-terminal">
+                <div class="terminal-wrapper">
+                    <div class="terminal-header">
+                        <div class="terminal-dots">
+                            <span class="t-dot red"></span>
+                            <span class="t-dot yellow"></span>
+                            <span class="t-dot green"></span>
+                        </div>
+                        <span style="font-size: 11px; font-family: var(--font-mono); color: var(--text-dim);">
+                            MESH PROTOCOL REAL-TIME STREAM
+                        </span>
+                        <div class="terminal-actions">
+                            <button id="btnClearTerminal" class="btn btn-ghost btn-sm" style="padding: 2px 8px; font-size: 10px;">
+                                Clear Logs
+                            </button>
+                        </div>
+                    </div>
+                    <div class="terminal-body" id="terminalLogs">
+                        <!-- Populated by app.js log() -->
+                    </div>
+                </div>
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- Modal 1: Interactive UPI PIN Pad -->
+    <div class="modal-overlay" id="pinModalOverlay">
+        <div class="modal-card pin-dialog">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <span>🔒 Enter UPI PIN</span>
+                </div>
+                <button class="modal-close" id="closePinModal">&times;</button>
+            </div>
+
+            <div style="font-size: 12px; color: var(--text-muted);">
+                Paying <strong id="modalPayAmount" style="color: var(--success-light);">₹500.00</strong> to <span id="modalPayee" style="color: var(--primary-light);">bob@demo</span>
+            </div>
+
+            <!-- 4 PIN Dots -->
+            <div class="pin-dots">
+                <div class="pin-dot"></div>
+                <div class="pin-dot"></div>
+                <div class="pin-dot"></div>
+                <div class="pin-dot"></div>
+            </div>
+
+            <!-- Numeric Keypad -->
+            <div class="numpad-grid">
+                <button class="numpad-btn" data-num="1">1</button>
+                <button class="numpad-btn" data-num="2">2</button>
+                <button class="numpad-btn" data-num="3">3</button>
+                <button class="numpad-btn" data-num="4">4</button>
+                <button class="numpad-btn" data-num="5">5</button>
+                <button class="numpad-btn" data-num="6">6</button>
+                <button class="numpad-btn" data-num="7">7</button>
+                <button class="numpad-btn" data-num="8">8</button>
+                <button class="numpad-btn" data-num="9">9</button>
+                <button class="numpad-btn action" data-action="backspace">⌫</button>
+                <button class="numpad-btn" data-num="0">0</button>
+                <button class="numpad-btn action" data-action="submit">✓</button>
+            </div>
+
+            <div style="font-size: 10px; color: var(--text-dim); margin-top: 16px;">
+                PIN is hashed locally & encrypted into the hybrid packet before Bluetooth broadcast.
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 2: Architecture & How It Works -->
+    <div class="modal-overlay" id="archModalOverlay">
+        <div class="modal-card" style="max-width: 780px;">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <span>📡 Architecture: The Three Hard Problems Solved</span>
+                </div>
+                <button class="modal-close" id="closeArchModal">&times;</button>
+            </div>
+
+            <!-- Problem 1 -->
+            <div class="arch-problem-box">
+                <div class="arch-problem-header">
+                    <span>1. Untrusted Intermediaries & Interception</span>
+                </div>
+                <div class="arch-problem-desc">
+                    When sending money in a dead zone, a random stranger's phone carries your packet. What prevents them from reading the amount, recipient, or changing the numbers?
+                </div>
+                <div class="arch-solution">
+                    <strong>Solution: Hybrid RSA-OAEP + AES-256-GCM.</strong>
+                    Payload is encrypted using a one-time AES key, and that key is wrapped with the server's RSA public key. Intermediates see only opaque ciphertext. AES-GCM provides authenticated encryption: flipping even 1 bit causes decryption to fail and rejects the transaction.
+                </div>
+            </div>
+
+            <!-- Problem 2 -->
+            <div class="arch-problem-box">
+                <div class="arch-problem-header">
+                    <span>2. The Duplicate-Storm (Concurrent Deliveries)</span>
+                </div>
+                <div class="arch-problem-desc">
+                    Because packets gossip to every device within range, multiple bridge phones may hold the exact same payment. When they all walk outside into 4G coverage at the same moment, the server receives multiple concurrent uploads.
+                </div>
+                <div class="arch-solution">
+                    <strong>Solution: Atomic PutIfAbsent / Redis SETNX on SHA-256(Ciphertext).</strong>
+                    Before decrypting, the server hashes the ciphertext and atomically claims it in an idempotency cache. Exactly one thread wins; duplicate deliveries are dropped immediately before ledger execution.
+                </div>
+            </div>
+
+            <!-- Problem 3 -->
+            <div class="arch-problem-box">
+                <div class="arch-problem-header">
+                    <span>3. Replay Attacks</span>
+                </div>
+                <div class="arch-problem-desc">
+                    What stops an eavesdropper from capturing an encrypted payment packet and replaying it weeks later to debit the sender a second time?
+                </div>
+                <div class="arch-solution">
+                    <strong>Solution: 24-Hour Freshness Window + Cryptographic Nonce.</strong>
+                    Inside the encrypted payload, the sender includes a unique UUID nonce and signedAt timestamp. The backend strictly rejects any packet older than 24 hours. Because the payload is authenticated by GCM, an attacker cannot forge or alter the timestamp.
+                </div>
+            </div>
+
+            <div style="text-align: right; margin-top: 16px;">
+                <button class="btn btn-primary btn-sm" onclick="window.app.closeArchModal()">
+                    Got It
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Scripts -->
+    <script src="js/mesh-visualizer.js"></script>
+    <script src="js/crypto-inspector.js"></script>
+    <script src="js/upi-phone.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

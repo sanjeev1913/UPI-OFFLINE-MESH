@@ -1,0 +1,239 @@
+package com.demo.upimesh.controller;
+
+import com.demo.upimesh.crypto.ServerKeyHolder;
+import com.demo.upimesh.model.*;
+import com.demo.upimesh.service.*;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.math.BigDecimal;
+import java.util.*;
+
+/**
+ * Public REST surface.
+ *
+ * The endpoints split into three groups:
+ *   /api/server-key      → so simulated senders can fetch the server's public key
+ *   /api/mesh/*          → simulator endpoints (inject, gossip, flush)
+ *   /api/bridge/ingest   → THE real production endpoint a real bridge node would hit
+ *   /api/accounts, /api/transactions → for the dashboard
+ */
+@CrossOrigin(origins = "*")
+@RestController
+@RequestMapping("/api")
+public class ApiController {
+
+    @Autowired private ServerKeyHolder serverKey;
+    @Autowired private DemoService demo;
+    @Autowired private MeshSimulatorService mesh;
+    @Autowired private BridgeIngestionService bridge;
+    @Autowired private AccountRepository accountRepo;
+    @Autowired private TransactionRepository txRepo;
+    @Autowired private IdempotencyService idempotency;
+
+    // ------------------------------------------------------------------ key
+
+    @GetMapping("/server-key")
+    public Map<String, String> getServerPublicKey() {
+        return Map.of(
+                "publicKey", serverKey.getPublicKeyBase64(),
+                "algorithm", "RSA-2048 / OAEP-SHA256",
+                "hybridScheme", "RSA-OAEP encrypts an AES-256-GCM session key"
+        );
+    }
+
+    // ---------------------------------------------------------------- demo
+
+    /**
+     * Demo helper: build a packet on the server (simulating a sender phone)
+     * and inject it into the mesh at the given device.
+     */
+    @PostMapping("/demo/send")
+    public ResponseEntity<?> demoSend(@RequestBody DemoSendRequest req) throws Exception {
+        MeshPacket packet = demo.createPacket(
+                req.senderVpa, req.receiverVpa, req.amount, req.pin,
+                req.ttl == null ? 5 : req.ttl);
+
+        String startDevice = req.startDevice == null ? "phone-alice" : req.startDevice;
+        mesh.inject(startDevice, packet);
+
+        return ResponseEntity.ok(Map.of(
+                "packetId", packet.getPacketId(),
+                "ciphertextPreview", packet.getCiphertext().substring(0, 64) + "...",
+                "ttl", packet.getTtl(),
+                "injectedAt", startDevice
+        ));
+    }
+
+    public static class DemoSendRequest {
+        public String senderVpa;
+        public String receiverVpa;
+        public BigDecimal amount;
+        public String pin;
+        public Integer ttl;
+        public String startDevice;
+    }
+
+    // -------------------------------------------------------------- mesh sim
+
+    @GetMapping("/mesh/state")
+    public Map<String, Object> meshState() {
+        List<Map<String, Object>> deviceData = new ArrayList<>();
+        for (VirtualDevice d : mesh.getDevices()) {
+            List<Map<String, Object>> packetDetails = new ArrayList<>();
+            for (MeshPacket p : d.getHeldPackets()) {
+                packetDetails.add(Map.of(
+                        "packetId", p.getPacketId(),
+                        "shortId", p.getPacketId().length() >= 8 ? p.getPacketId().substring(0, 8) : p.getPacketId(),
+                        "ttl", p.getTtl(),
+                        "createdAt", p.getCreatedAt(),
+                        "ciphertextPreview", p.getCiphertext().length() > 32 ? p.getCiphertext().substring(0, 32) + "..." : p.getCiphertext(),
+                        "ciphertext", p.getCiphertext()
+                ));
+            }
+
+            deviceData.add(Map.of(
+                    "deviceId", d.getDeviceId(),
+                    "hasInternet", d.hasInternet(),
+                    "packetCount", d.packetCount(),
+                    "packetIds", d.getHeldPackets().stream()
+                            .map(p -> p.getPacketId().length() >= 8 ? p.getPacketId().substring(0, 8) : p.getPacketId())
+                            .toList(),
+                    "packets", packetDetails
+            ));
+        }
+        return Map.of(
+                "devices", deviceData,
+                "idempotencyCacheSize", idempotency.size()
+        );
+    }
+
+    @PostMapping("/mesh/device/toggle")
+    public Map<String, Object> toggleDeviceInternet(@RequestBody Map<String, Object> req) {
+        String deviceId = (String) req.get("deviceId");
+        Boolean status = req.containsKey("hasInternet") ? (Boolean) req.get("hasInternet") : null;
+        VirtualDevice dev = mesh.getDevice(deviceId);
+        if (dev != null) {
+            boolean newStatus = (status != null) ? status : !dev.hasInternet();
+            dev.setHasInternet(newStatus);
+            return Map.of("deviceId", deviceId, "hasInternet", newStatus);
+        }
+        return Map.of("error", "Device not found");
+    }
+
+    @PostMapping("/demo/seed-bridges")
+    public Map<String, Object> seedThreeBridges() {
+        mesh.seedThreeBridges();
+        return Map.of("status", "3 bridge devices configured with internet");
+    }
+
+    @PostMapping("/demo/restore-topology")
+    public Map<String, Object> restoreTopology() {
+        mesh.restoreDefaultTopology();
+        return Map.of("status", "Default topology restored");
+    }
+
+    /**
+     * Tamper simulation: deliberately flips a character in a ciphertext
+     * and attempts to ingest it via the bridge endpoint.
+     * Demonstrates AES-GCM tag verification failure and rejection.
+     */
+    @PostMapping("/demo/tamper-test")
+    public ResponseEntity<?> testTamper() throws Exception {
+        // Create a legitimate packet
+        MeshPacket p = demo.createPacket("alice@demo", "bob@demo", new BigDecimal("100.00"), "1234", 5);
+        String ct = p.getCiphertext();
+        // Flip one character in the middle
+        int flipIdx = ct.length() / 2;
+        char flipped = ct.charAt(flipIdx) == 'A' ? 'B' : 'A';
+        String tamperedCt = ct.substring(0, flipIdx) + flipped + ct.substring(flipIdx + 1);
+        p.setCiphertext(tamperedCt);
+
+        BridgeIngestionService.IngestResult r = bridge.ingest(p, "phone-bridge-tamper-tester", 2);
+        return ResponseEntity.ok(Map.of(
+                "tamperedAtChar", flipIdx,
+                "outcome", r.outcome(),
+                "reason", r.reason() == null ? "" : r.reason()
+        ));
+    }
+
+    @PostMapping("/mesh/gossip")
+    public Map<String, Object> meshGossip() {
+        MeshSimulatorService.GossipResult r = mesh.gossipOnce();
+        return Map.of(
+                "transfers", r.transfers(),
+                "deviceCounts", r.deviceCounts()
+        );
+    }
+
+    /**
+     * "All bridge nodes simultaneously walk outside and get 4G."
+     * They all upload everything they hold to /api/bridge/ingest.
+     *
+     * THIS is the moment the duplicate-storm idempotency case is tested:
+     * if multiple bridge nodes hold the same packet, the server gets multiple
+     * concurrent POSTs of the same ciphertext, and only one should settle.
+     */
+    @PostMapping("/mesh/flush")
+    public Map<String, Object> meshFlush() {
+        List<MeshSimulatorService.BridgeUpload> uploads = mesh.collectBridgeUploads();
+
+        List<Map<String, Object>> results = new ArrayList<>();
+        // Upload them in parallel to actually exercise concurrent idempotency.
+        uploads.parallelStream().forEach(up -> {
+            BridgeIngestionService.IngestResult r =
+                    bridge.ingest(up.packet(), up.bridgeNodeId(), 5 - up.packet().getTtl());
+            synchronized (results) {
+                results.add(Map.of(
+                        "bridgeNode", up.bridgeNodeId(),
+                        "packetId", up.packet().getPacketId().substring(0, 8),
+                        "outcome", r.outcome(),
+                        "reason", r.reason() == null ? "" : r.reason(),
+                        "transactionId", r.transactionId() == null ? -1 : r.transactionId()
+                ));
+            }
+        });
+
+        return Map.of(
+                "uploadsAttempted", uploads.size(),
+                "results", results
+        );
+    }
+
+    @PostMapping("/mesh/reset")
+    public Map<String, Object> meshReset() {
+        mesh.resetMesh();
+        idempotency.clear();
+        return Map.of("status", "mesh and idempotency cache cleared");
+    }
+
+    // -------------------------------------------------------------- bridge
+
+    /**
+     * THE PRODUCTION ENDPOINT.
+     * In a real deployment, the Android app's bridge logic POSTs here whenever
+     * the device has internet and is holding mesh packets.
+     */
+    @PostMapping("/bridge/ingest")
+    public ResponseEntity<?> ingest(
+            @RequestBody MeshPacket packet,
+            @RequestHeader(value = "X-Bridge-Node-Id", defaultValue = "unknown") String bridgeNodeId,
+            @RequestHeader(value = "X-Hop-Count", defaultValue = "0") int hopCount) {
+
+        BridgeIngestionService.IngestResult r = bridge.ingest(packet, bridgeNodeId, hopCount);
+        return ResponseEntity.ok(r);
+    }
+
+    // ------------------------------------------------------------- accounts
+
+    @GetMapping("/accounts")
+    public List<Account> listAccounts() {
+        return accountRepo.findAll();
+    }
+
+    @GetMapping("/transactions")
+    public List<Transaction> listTransactions() {
+        return txRepo.findTop20ByOrderByIdDesc();
+    }
+}
